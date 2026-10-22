@@ -1,0 +1,55 @@
+# CI for pull requests and main.
+#
+# One macOS job (the only platform zeitstempel is used on): format,
+# clippy, tests, and an advisory check. The Rust version comes from
+# rust-toolchain.toml, so new lints only arrive with a deliberate bump.
+# Tests never touch the network; they run against recorded fixtures.
+#
+# Cost while idle: nothing. It only runs on pushes and pull requests,
+# and Actions minutes are free for public repositories.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: fmt, clippy, test, audit
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # rustup installs the pinned toolchain from rust-toolchain.toml.
+      - name: Show toolchain
+        run: rustup show active-toolchain && cargo --version
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2.87.30
+        with:
+          tool: cargo-audit
+
+      # Fails on vulnerabilities only; unmaintained/unsound crates are
+      # reported as warnings.
+      - name: Advisories
+        run: cargo audit

@@ -1,14 +1,14 @@
-/// Operation executors — apply proof-chain operations to a message.
-///
-/// Each operation transforms a byte vector (the "message") as it walks
-/// down the proof tree. Hash operations produce fixed-size digests;
-/// append/prepend concatenate data; reverse/hexlify transform in place.
+//! Operation executors — apply proof-chain operations to a message.
+//!
+//! Each operation transforms a byte vector (the "message") as it walks
+//! down the proof tree. Hash operations produce fixed-size digests;
+//! append/prepend concatenate data; reverse/hexlify transform in place.
 
-use sha2::{Sha256, Digest};
-use sha1::Sha1;
 use ripemd::Ripemd160;
+use sha1::Sha1;
+use sha2::{Digest, Sha256};
 
-use crate::parser::{Operation, HashOp};
+use crate::parser::{HashOp, Operation};
 
 /// Maximum message length (bytes) during proof replay.
 ///
@@ -62,8 +62,8 @@ fn check_msg_len(len: usize) -> Result<(), OpError> {
 /// Hash file contents using the algorithm specified in the OTS header.
 pub fn hash_file_contents(data: &[u8], hash_op: HashOp) -> Result<Vec<u8>, OpError> {
     match hash_op {
-        HashOp::Sha256    => Ok(Sha256::digest(data).to_vec()),
-        HashOp::Sha1      => Ok(Sha1::digest(data).to_vec()),
+        HashOp::Sha256 => Ok(Sha256::digest(data).to_vec()),
+        HashOp::Sha1 => Ok(Sha1::digest(data).to_vec()),
         HashOp::Ripemd160 => Ok(Ripemd160::digest(data).to_vec()),
         HashOp::Keccak256 => Err(OpError::UnsupportedOp("Keccak256")),
     }
@@ -79,10 +79,18 @@ impl std::fmt::Display for OpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OpError::UnsupportedOp(name) => {
-                write!(f, "{} is not yet supported — add the sha3 crate if needed", name)
+                write!(
+                    f,
+                    "{} is not yet supported — add the sha3 crate if needed",
+                    name
+                )
             }
             OpError::MessageTooLarge(len) => {
-                write!(f, "proof message would grow to {} bytes (limit {}); refusing to continue", len, MAX_MSG_LEN)
+                write!(
+                    f,
+                    "proof message would grow to {} bytes (limit {}); refusing to continue",
+                    len, MAX_MSG_LEN
+                )
             }
         }
     }
@@ -99,14 +107,20 @@ mod tests {
     fn test_sha256_known_answer() {
         // SHA256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
         let result = apply(&Operation::Sha256, b"").unwrap();
-        assert_eq!(hex(&result), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert_eq!(
+            hex(&result),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 
     #[test]
     fn test_sha256_hello_world() {
         // SHA256("Hello World!\n") — the digest stored in our fixture
         let result = hash_file_contents(b"Hello World!\n", HashOp::Sha256).unwrap();
-        assert_eq!(hex(&result), "03ba204e50d126e4674c005e04d82e84c21366780af1f43bd54a37816b6ab340");
+        assert_eq!(
+            hex(&result),
+            "03ba204e50d126e4674c005e04d82e84c21366780af1f43bd54a37816b6ab340"
+        );
     }
 
     #[test]

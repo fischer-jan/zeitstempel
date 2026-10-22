@@ -81,6 +81,22 @@ File hash: 03ba204e50d126e4674c005e04d82e84c21366780af1f43bd54a37816b6ab340 (SHA
                             └── Bitcoin block #358391
 ```
 
+## Install
+
+Each release has a command-line binary for Apple Silicon Macs. It is not signed, so macOS blocks a copy downloaded in a browser. Install it from Terminal instead (replace `v0.1.0` with the release you want):
+
+```bash
+curl -fsSL https://github.com/fischer-jan/zeitstempel/releases/download/v0.1.0/zeitstempel-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv zeitstempel-v0.1.0-aarch64-apple-darwin/zeitstempel /usr/local/bin/
+```
+
+Or build and install with cargo, which also works for the GUI:
+
+```bash
+cargo install --git https://github.com/fischer-jan/zeitstempel zeitstempel
+cargo install --git https://github.com/fischer-jan/zeitstempel zeitstempel-gui
+```
+
 ## Build
 
 ```bash
@@ -100,7 +116,9 @@ Tests include:
 - Known-answer hash tests (SHA256, SHA1, RIPEMD160)
 - Operation tests (append, prepend, reverse, hexlify)
 - Parser tests against real .ots fixtures
-- Full Bitcoin verification (requires network)
+- Full Bitcoin verification and stamping against recorded server responses (`core/tests/fixtures/http/`), so the tests never use the network
+
+CI runs format, clippy, the tests and `cargo audit` on every pull request. Pushing a `v*` tag builds the release binary.
 
 ## Architecture
 

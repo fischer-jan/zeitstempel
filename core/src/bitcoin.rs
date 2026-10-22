@@ -1,9 +1,9 @@
-/// Bitcoin block header lookups via public APIs.
-///
-/// We query Blockstream.info first, with mempool.space as fallback.
-/// The two endpoints we need:
-///   GET /api/block-height/{height}  → block hash (plain text)
-///   GET /api/block/{hash}           → JSON with merkle_root, timestamp, etc.
+//! Bitcoin block header lookups via public APIs.
+//!
+//! We query Blockstream.info first, with mempool.space as fallback.
+//! The two endpoints we need:
+//!   GET /api/block-height/{height}  → block hash (plain text)
+//!   GET /api/block/{hash}           → JSON with merkle_root, timestamp, etc.
 
 use std::fmt;
 
@@ -12,13 +12,14 @@ use std::fmt;
 pub struct BlockInfo {
     pub height: u64,
     pub block_hash: String,
-    pub merkle_root: String,  // hex, display order (big-endian)
-    pub timestamp: u64,       // Unix epoch seconds
+    pub merkle_root: String,               // hex, display order (big-endian)
+    pub timestamp: u64,                    // Unix epoch seconds
     pub previousblockhash: Option<String>, // for future chain validation
 }
 
 #[derive(Debug)]
 pub enum ApiError {
+    Config(String),
     Http(String),
     Parse(String),
 }
@@ -26,7 +27,8 @@ pub enum ApiError {
 impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ApiError::Http(msg)  => write!(f, "HTTP error: {}", msg),
+            ApiError::Config(msg) => write!(f, "configuration error: {}", msg),
+            ApiError::Http(msg) => write!(f, "HTTP error: {}", msg),
             ApiError::Parse(msg) => write!(f, "parse error: {}", msg),
         }
     }
@@ -36,13 +38,21 @@ impl std::error::Error for ApiError {}
 
 /// Fetch block info for a given block height.
 ///
-/// Tries Blockstream.info first, falls back to mempool.space.
+/// Tries each API from `endpoints::bitcoin_apis()` in turn
+/// (Blockstream.info, then mempool.space) and returns the first success.
 pub fn get_block_info(height: u64) -> Result<BlockInfo, ApiError> {
-    get_block_info_from("https://blockstream.info/api", height)
-        .or_else(|_| {
-            eprintln!("  (Blockstream unavailable, trying mempool.space...)");
-            get_block_info_from("https://mempool.space/api", height)
-        })
+    let apis = crate::endpoints::bitcoin_apis().map_err(ApiError::Config)?;
+    let mut last_err = None;
+    for (i, base_url) in apis.iter().enumerate() {
+        if i > 0 {
+            eprintln!("  ({} unavailable, trying {}...)", apis[i - 1], base_url);
+        }
+        match get_block_info_from(base_url, height) {
+            Ok(info) => return Ok(info),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(last_err.expect("bitcoin_apis() never returns an empty list"))
 }
 
 fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiError> {
@@ -55,7 +65,8 @@ fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiErro
     if block_hash.len() != 64 {
         return Err(ApiError::Parse(format!(
             "expected 64-char block hash, got {} chars: '{}'",
-            block_hash.len(), block_hash
+            block_hash.len(),
+            block_hash
         )));
     }
 
@@ -97,9 +108,7 @@ fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiErro
         ));
     }
 
-    let previousblockhash = json["previousblockhash"]
-        .as_str()
-        .map(|s| s.to_string());
+    let previousblockhash = json["previousblockhash"].as_str().map(|s| s.to_string());
 
     Ok(BlockInfo {
         height,
@@ -127,11 +136,35 @@ fn http_get_text(url: &str) -> Result<String, ApiError> {
 /// The API returns "abc123..." in display order, but the proof chain
 /// produces bytes in little-endian (reversed) order.
 pub fn merkle_root_to_le_bytes(hex_be: &str) -> Result<Vec<u8>, ApiError> {
-    let bytes = hex_to_bytes(hex_be)
-        .map_err(|e| ApiError::Parse(format!("bad merkle root hex: {}", e)))?;
+    let bytes =
+        hex_to_bytes(hex_be).map_err(|e| ApiError::Parse(format!("bad merkle root hex: {}", e)))?;
     let mut le = bytes;
     le.reverse();
     Ok(le)
+}
+
+/// Parse a hex string into bytes.
+///
+/// Validates ASCII hex before slicing — a compromised Bitcoin API
+/// returning a `merkle_root` with multi-byte UTF-8 characters would
+/// otherwise panic on the `&hex[i..i+2]` slice landing in the middle
+/// of a code point.
+fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
+    let bytes = hex.as_bytes();
+    if !bytes.len().is_multiple_of(2) {
+        return Err("odd-length hex string".into());
+    }
+    if !bytes.iter().all(|b| b.is_ascii_hexdigit()) {
+        return Err("non-hex character in input".into());
+    }
+    bytes
+        .chunks_exact(2)
+        .map(|pair| {
+            // SAFETY: `pair` is two ASCII hex bytes, validated above.
+            let s = std::str::from_utf8(pair).expect("ASCII hex");
+            u8::from_str_radix(s, 16).map_err(|e| format!("invalid hex: {}", e))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -171,28 +204,4 @@ mod tests {
         // "0102" big-endian → bytes [0x01, 0x02] → reversed [0x02, 0x01]
         assert_eq!(merkle_root_to_le_bytes("0102").unwrap(), vec![0x02, 0x01]);
     }
-}
-
-/// Parse a hex string into bytes.
-///
-/// Validates ASCII hex before slicing — a compromised Bitcoin API
-/// returning a `merkle_root` with multi-byte UTF-8 characters would
-/// otherwise panic on the `&hex[i..i+2]` slice landing in the middle
-/// of a code point.
-fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
-    let bytes = hex.as_bytes();
-    if bytes.len() % 2 != 0 {
-        return Err("odd-length hex string".into());
-    }
-    if !bytes.iter().all(|b| b.is_ascii_hexdigit()) {
-        return Err("non-hex character in input".into());
-    }
-    bytes
-        .chunks_exact(2)
-        .map(|pair| {
-            // SAFETY: `pair` is two ASCII hex bytes, validated above.
-            let s = std::str::from_utf8(pair).expect("ASCII hex");
-            u8::from_str_radix(s, 16).map_err(|e| format!("invalid hex: {}", e))
-        })
-        .collect()
 }

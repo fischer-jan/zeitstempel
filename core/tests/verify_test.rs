@@ -1,21 +1,38 @@
-/// Integration tests for zeitstempel.
-///
-/// These test the full verification pipeline from file -> parse -> verify.
-/// The Bitcoin API tests require network access.
+//! Integration tests for zeitstempel.
+//!
+//! These test the full verification pipeline from file -> parse -> verify.
+//! Every run talks to a local fixture server (see `common`), never to
+//! the live Bitcoin APIs or calendar servers.
 
+mod common;
+
+use common::FixtureServer;
 use std::process::Command;
 
-/// Helper: run zeitstempel as a subprocess and capture output.
-fn run_zeitstempel(args: &[&str]) -> (i32, String, String) {
+/// Helper: run zeitstempel as a subprocess against a fresh fixture
+/// server. Returns exit code, stdout, stderr and the requests served.
+fn run_with_fixtures(args: &[&str]) -> (i32, String, String, Vec<String>) {
+    let server = FixtureServer::start();
+    // Two calendar entries, like the real default list, so stamp
+    // exercises the fork path for multiple calendar responses.
+    let calendars = format!("{0},{0}", server.base_url);
     let output = Command::new("cargo")
         .args(["run", "--quiet", "--"])
         .args(args)
+        .env("ZEITSTEMPEL_BITCOIN_API", &server.base_url)
+        .env("ZEITSTEMPEL_CALENDARS", calendars)
         .output()
         .expect("failed to execute zeitstempel");
 
     let code = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    (code, stdout, stderr, server.requests())
+}
+
+/// Helper: like `run_with_fixtures`, for tests that don't check requests.
+fn run_zeitstempel(args: &[&str]) -> (i32, String, String) {
+    let (code, stdout, stderr, _) = run_with_fixtures(args);
     (code, stdout, stderr)
 }
 
@@ -57,7 +74,11 @@ fn test_verify_wrong_file() {
 
 #[test]
 fn test_verify_missing_file() {
-    let (code, _, stderr) = run_zeitstempel(&["verify", "nonexistent.txt", "tests/fixtures/hello-world.txt.ots"]);
+    let (code, _, stderr) = run_zeitstempel(&[
+        "verify",
+        "nonexistent.txt",
+        "tests/fixtures/hello-world.txt.ots",
+    ]);
     assert_ne!(code, 0);
     assert!(stderr.contains("Error reading"));
 }
@@ -92,10 +113,11 @@ fn test_legacy_bare_two_arg_form() {
     assert!(stdout.contains("Verified!"));
 }
 
-/// Full verification via the verify subcommand against the Bitcoin blockchain.
+/// Full verification via the verify subcommand against the recorded
+/// Bitcoin block (golden fixture of block 358391).
 #[test]
 fn test_full_bitcoin_verification() {
-    let (code, stdout, _) = run_zeitstempel(&[
+    let (code, stdout, _, requests) = run_with_fixtures(&[
         "verify",
         "tests/fixtures/hello-world.txt",
         "tests/fixtures/hello-world.txt.ots",
@@ -104,6 +126,14 @@ fn test_full_bitcoin_verification() {
     assert!(stdout.contains("Verified!"));
     assert!(stdout.contains("358391"));
     assert!(stdout.contains("Merkle root match confirmed"));
+    assert_eq!(
+        requests,
+        vec![
+            "GET /block-height/358391".to_string(),
+            format!("GET /block/{}", common::HELLO_WORLD_BLOCK_HASH),
+        ],
+        "verification should use the block fixtures and nothing else"
+    );
 }
 
 // ── Stamp subcommand tests ───────────────────────────────────────
@@ -120,13 +150,18 @@ fn test_stamp_creates_ots_file() {
 
     std::fs::write(&input, b"Stamp integration test\n").unwrap();
 
-    let (code, stdout, stderr) = run_zeitstempel(&[
-        "stamp",
-        input.to_str().unwrap(),
-    ]);
+    let (code, stdout, stderr, requests) = run_with_fixtures(&["stamp", input.to_str().unwrap()]);
     assert_eq!(code, 0, "stamp should succeed. stderr: {}", stderr);
-    assert!(stdout.contains("Timestamp proof created"), "should confirm creation");
+    assert!(
+        stdout.contains("Timestamp proof created"),
+        "should confirm creation"
+    );
     assert!(ots.exists(), ".ots file should exist");
+    assert_eq!(
+        requests,
+        vec!["POST /digest", "POST /digest"],
+        "stamp should submit to both fixture calendars"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -153,9 +188,15 @@ fn test_stamp_then_info_shows_pending() {
     // Inspect with info — should show Pending attestation(s)
     let (code, stdout, _) = run_zeitstempel(&["info", ots.to_str().unwrap()]);
     assert_eq!(code, 0, "info should succeed");
-    assert!(stdout.contains("Pending"), "should show Pending attestation");
+    assert!(
+        stdout.contains("Pending"),
+        "should show Pending attestation"
+    );
     assert!(stdout.contains("SHA256"), "should show SHA256 hash op");
-    assert!(stdout.contains("calendar.opentimestamps.org"), "should show calendar URI");
+    assert!(
+        stdout.contains("calendar.opentimestamps.org"),
+        "should show calendar URI"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -182,14 +223,18 @@ fn test_stamp_then_verify_digest_matches() {
     // Digest matches but the proof is pending — exit 2 means "not
     // verified yet", distinct from both success (0) and failure (1),
     // so scripts can't mistake a pending proof for a verified one.
-    let (code, stdout, stderr) = run_zeitstempel(&[
-        "verify",
-        input.to_str().unwrap(),
-        ots.to_str().unwrap(),
-    ]);
-    assert_eq!(code, 2, "pending-only verify should exit 2. stderr: {}", stderr);
+    let (code, stdout, stderr) =
+        run_zeitstempel(&["verify", input.to_str().unwrap(), ots.to_str().unwrap()]);
+    assert_eq!(
+        code, 2,
+        "pending-only verify should exit 2. stderr: {}",
+        stderr
+    );
     assert!(stdout.contains("Pending"), "should show Pending status");
-    assert!(stdout.contains("Not verified"), "should state it is not verified");
+    assert!(
+        stdout.contains("Not verified"),
+        "should state it is not verified"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -210,7 +255,10 @@ fn test_stamp_refuses_to_overwrite() {
 
     let (code, _, stderr) = run_zeitstempel(&["stamp", input.to_str().unwrap()]);
     assert_ne!(code, 0, "stamp should refuse to overwrite");
-    assert!(stderr.contains("already exists"), "should warn about existing file");
+    assert!(
+        stderr.contains("already exists"),
+        "should warn about existing file"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -229,7 +277,10 @@ fn test_stamp_missing_file() {
 fn test_help_includes_stamp() {
     let (code, stdout, _) = run_zeitstempel(&["--help"]);
     assert_eq!(code, 0);
-    assert!(stdout.contains("stamp"), "help should mention stamp subcommand");
+    assert!(
+        stdout.contains("stamp"),
+        "help should mention stamp subcommand"
+    );
 }
 
 // ── Upgrade subcommand tests ──────────────────────────────────────
@@ -245,7 +296,10 @@ fn test_upgrade_no_args_shows_usage() {
 fn test_upgrade_missing_file() {
     let (code, _, stderr) = run_zeitstempel(&["upgrade", "nonexistent.ots"]);
     assert_ne!(code, 0);
-    assert!(stderr.contains("Error"), "should report error for missing file");
+    assert!(
+        stderr.contains("Error"),
+        "should report error for missing file"
+    );
 }
 
 #[test]
@@ -277,7 +331,10 @@ fn test_upgrade_invalid_ots() {
 fn test_help_includes_upgrade() {
     let (code, stdout, _) = run_zeitstempel(&["--help"]);
     assert_eq!(code, 0);
-    assert!(stdout.contains("upgrade"), "help should mention upgrade subcommand");
+    assert!(
+        stdout.contains("upgrade"),
+        "help should mention upgrade subcommand"
+    );
 }
 
 #[test]
@@ -321,7 +378,9 @@ fn test_info_golden_pending_fixture() {
     );
     // Must NOT contain corrupted URIs
     assert!(
-        !stdout.contains("Pending (-") && !stdout.contains("Pending (+") && !stdout.contains("Pending (("),
+        !stdout.contains("Pending (-")
+            && !stdout.contains("Pending (+")
+            && !stdout.contains("Pending (("),
         "Pending URIs should not have prefix bytes, got:\n{}",
         stdout,
     );

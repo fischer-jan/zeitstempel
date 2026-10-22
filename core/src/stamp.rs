@@ -1,27 +1,23 @@
-/// Stamping logic — hash a file and submit to OpenTimestamps calendar servers.
-///
-/// The stamping flow:
-///   1. SHA256-hash the file
-///   2. Generate a 16-byte random nonce (privacy protection)
-///   3. Compute calendar_digest = SHA256(nonce || file_digest)
-///   4. POST the 32-byte calendar_digest to calendar server(s)
-///   5. Build the .ots binary from header + operations + calendar responses
+//! Stamping logic — hash a file and submit to OpenTimestamps calendar servers.
+//!
+//! The stamping flow:
+//!   1. SHA256-hash the file
+//!   2. Generate a 16-byte random nonce (privacy protection)
+//!   3. Compute calendar_digest = SHA256(nonce || file_digest)
+//!   4. POST the 32-byte calendar_digest to calendar server(s)
+//!   5. Build the .ots binary from header + operations + calendar responses
 
+use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::Read;
-use sha2::{Sha256, Digest};
 
+use crate::endpoints;
 use crate::parser;
 use crate::writer;
 
-/// Calendar servers to submit to (first two for speed).
-const CALENDAR_SERVERS: &[&str] = &[
-    "https://alice.btc.calendar.opentimestamps.org",
-    "https://bob.btc.calendar.opentimestamps.org",
-];
-
 #[derive(Debug)]
 pub enum StampError {
+    Config(String),
     NoCalendarResponse(String),
     Http(String),
     Rng(String),
@@ -30,7 +26,10 @@ pub enum StampError {
 impl fmt::Display for StampError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StampError::NoCalendarResponse(msg) => write!(f, "no calendar server responded: {}", msg),
+            StampError::Config(msg) => write!(f, "configuration error: {}", msg),
+            StampError::NoCalendarResponse(msg) => {
+                write!(f, "no calendar server responded: {}", msg)
+            }
             StampError::Http(msg) => write!(f, "HTTP error: {}", msg),
             StampError::Rng(msg) => write!(f, "random number generation failed: {}", msg),
         }
@@ -43,25 +42,26 @@ impl std::error::Error for StampError {}
 ///
 /// The returned bytes can be written directly to a `.ots` file.
 pub fn stamp_file(file_data: &[u8]) -> Result<Vec<u8>, StampError> {
+    let servers = endpoints::calendars().map_err(StampError::Config)?;
+
     // 1. Compute file digest
     let file_digest = Sha256::digest(file_data);
 
     // 2. Generate 16-byte random nonce for privacy
     let mut nonce = [0u8; 16];
-    getrandom::getrandom(&mut nonce)
-        .map_err(|e| StampError::Rng(format!("{}", e)))?;
+    getrandom::getrandom(&mut nonce).map_err(|e| StampError::Rng(format!("{}", e)))?;
 
     // 3. Compute calendar digest: SHA256(nonce || file_digest)
     let mut hasher = Sha256::new();
-    hasher.update(&nonce);
-    hasher.update(&file_digest);
+    hasher.update(nonce);
+    hasher.update(file_digest);
     let calendar_digest = hasher.finalize();
 
     // 4. Submit to calendar servers in parallel-ish (sequential with short timeout)
     let mut responses: Vec<(&str, Vec<u8>)> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
 
-    for server in CALENDAR_SERVERS {
+    for server in &servers {
         match submit_to_calendar(server, &calendar_digest) {
             // Only embed responses that parse as a valid timestamp
             // tree — a broken or malicious calendar response would
@@ -129,7 +129,8 @@ fn submit_to_calendar(server: &str, digest: &[u8]) -> Result<Vec<u8>, StampError
         .map_err(|e| StampError::Http(format!("{}: {}", url, e)))?;
 
     let mut body = Vec::new();
-    response.into_reader()
+    response
+        .into_reader()
         .take(65536) // 64KB max — calendar responses are typically ~4KB
         .read_to_end(&mut body)
         .map_err(|e| StampError::Http(format!("reading response from {}: {}", url, e)))?;
@@ -164,8 +165,8 @@ mod tests {
         let nonce = [0u8; 16]; // zero nonce for reproducibility
 
         let mut hasher = Sha256::new();
-        hasher.update(&nonce);
-        hasher.update(&file_digest);
+        hasher.update(nonce);
+        hasher.update(file_digest);
         let calendar_digest = hasher.finalize();
 
         // Should be 32 bytes

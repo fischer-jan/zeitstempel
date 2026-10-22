@@ -1,0 +1,8 @@
+# Keep the pinned GitHub Actions current, once a month.
+# Cargo crates are updated by hand; CI flags vulnerable ones on every PR.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
