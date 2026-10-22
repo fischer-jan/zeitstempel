@@ -1,0 +1,77 @@
+# Release the zeitstempel CLI when a version tag (v*) is pushed.
+#
+# Builds an Apple Silicon binary, packs it with a SHA-256 checksum and
+# attaches both to a GitHub Release. The GUI is not shipped: unsigned
+# macOS apps are blocked as "damaged"; install it with cargo instead.
+#
+# The binary is not signed or notarized. macOS blocks unsigned programs
+# downloaded in a browser, so the release notes show a curl install,
+# which does not set the quarantine flag.
+#
+# Cost while idle: nothing. It only runs when a tag is pushed.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-14
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check tag matches the crate version
+        run: |
+          crate_version=$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import sys,json; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="zeitstempel"))')
+          if [ "v$crate_version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match core/Cargo.toml version $crate_version"
+            exit 1
+          fi
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Build
+        run: cargo build --release --locked -p zeitstempel --bin zeitstempel
+
+      - name: Package
+        run: |
+          name="zeitstempel-$GITHUB_REF_NAME-aarch64-apple-darwin"
+          mkdir "$name"
+          cp target/release/zeitstempel README.md LICENSE "$name/"
+          tar czf "$name.tar.gz" "$name"
+          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+          echo "ARCHIVE=$name" >> "$GITHUB_ENV"
+
+      - name: Write release notes
+        run: |
+          cat > notes.md <<EOF
+          Command-line binary for Apple Silicon Macs.
+
+          The binary is not signed. A copy downloaded in a browser is blocked by macOS, so install it from Terminal:
+
+          \`\`\`sh
+          curl -fsSL https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$ARCHIVE.tar.gz | tar xz
+          sudo mv $ARCHIVE/zeitstempel /usr/local/bin/
+          \`\`\`
+
+          Or build it yourself: \`cargo install --git https://github.com/$GITHUB_REPOSITORY zeitstempel\`.
+          The GUI: \`cargo install --git https://github.com/$GITHUB_REPOSITORY zeitstempel-gui\`.
+          EOF
+
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          body_path: notes.md
+          files: |
+            ${{ env.ARCHIVE }}.tar.gz
+            ${{ env.ARCHIVE }}.tar.gz.sha256
