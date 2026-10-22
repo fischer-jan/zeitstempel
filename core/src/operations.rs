@@ -1,10 +1,11 @@
+//! Operation executors — apply proof-chain operations to a message.
+//!
+//! Each operation transforms a byte vector (the "message") as it walks
+//! down the proof tree. Hash operations produce fixed-size digests;
+//! append/prepend concatenate data; reverse/hexlify transform in place.
+
 use ripemd::Ripemd160;
 use sha1::Sha1;
-/// Operation executors — apply proof-chain operations to a message.
-///
-/// Each operation transforms a byte vector (the "message") as it walks
-/// down the proof tree. Hash operations produce fixed-size digests;
-/// append/prepend concatenate data; reverse/hexlify transform in place.
 use sha2::{Digest, Sha256};
 
 use crate::parser::{HashOp, Operation};

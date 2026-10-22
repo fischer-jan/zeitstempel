@@ -1,11 +1,12 @@
-/// Binary .ots format parser — all byte-level parsing by hand.
-///
-/// The OpenTimestamps proof format is a compact binary tree:
-///   [magic header][version][hash_op][file_digest][timestamp_tree]
-///
-/// The timestamp tree is recursive: operations chain together, `0xFF`
-/// marks forks (multiple paths from one node), and attestations are
-/// the leaves (Bitcoin block anchors, pending calendar URIs, etc.).
+//! Binary .ots format parser — all byte-level parsing by hand.
+//!
+//! The OpenTimestamps proof format is a compact binary tree:
+//!   [magic header][version][hash_op][file_digest][timestamp_tree]
+//!
+//! The timestamp tree is recursive: operations chain together, `0xFF`
+//! marks forks (multiple paths from one node), and attestations are
+//! the leaves (Bitcoin block anchors, pending calendar URIs, etc.).
+
 use std::fmt;
 
 // ── Magic header (31 bytes) ────────────────────────────────────────

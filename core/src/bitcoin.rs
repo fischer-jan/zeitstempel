@@ -1,9 +1,10 @@
-/// Bitcoin block header lookups via public APIs.
-///
-/// We query Blockstream.info first, with mempool.space as fallback.
-/// The two endpoints we need:
-///   GET /api/block-height/{height}  → block hash (plain text)
-///   GET /api/block/{hash}           → JSON with merkle_root, timestamp, etc.
+//! Bitcoin block header lookups via public APIs.
+//!
+//! We query Blockstream.info first, with mempool.space as fallback.
+//! The two endpoints we need:
+//!   GET /api/block-height/{height}  → block hash (plain text)
+//!   GET /api/block/{hash}           → JSON with merkle_root, timestamp, etc.
+
 use std::fmt;
 
 /// Information about a Bitcoin block relevant for OTS verification.
@@ -131,6 +132,30 @@ pub fn merkle_root_to_le_bytes(hex_be: &str) -> Result<Vec<u8>, ApiError> {
     Ok(le)
 }
 
+/// Parse a hex string into bytes.
+///
+/// Validates ASCII hex before slicing — a compromised Bitcoin API
+/// returning a `merkle_root` with multi-byte UTF-8 characters would
+/// otherwise panic on the `&hex[i..i+2]` slice landing in the middle
+/// of a code point.
+fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
+    let bytes = hex.as_bytes();
+    if !bytes.len().is_multiple_of(2) {
+        return Err("odd-length hex string".into());
+    }
+    if !bytes.iter().all(|b| b.is_ascii_hexdigit()) {
+        return Err("non-hex character in input".into());
+    }
+    bytes
+        .chunks_exact(2)
+        .map(|pair| {
+            // SAFETY: `pair` is two ASCII hex bytes, validated above.
+            let s = std::str::from_utf8(pair).expect("ASCII hex");
+            u8::from_str_radix(s, 16).map_err(|e| format!("invalid hex: {}", e))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,28 +193,4 @@ mod tests {
         // "0102" big-endian → bytes [0x01, 0x02] → reversed [0x02, 0x01]
         assert_eq!(merkle_root_to_le_bytes("0102").unwrap(), vec![0x02, 0x01]);
     }
-}
-
-/// Parse a hex string into bytes.
-///
-/// Validates ASCII hex before slicing — a compromised Bitcoin API
-/// returning a `merkle_root` with multi-byte UTF-8 characters would
-/// otherwise panic on the `&hex[i..i+2]` slice landing in the middle
-/// of a code point.
-fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, String> {
-    let bytes = hex.as_bytes();
-    if bytes.len() % 2 != 0 {
-        return Err("odd-length hex string".into());
-    }
-    if !bytes.iter().all(|b| b.is_ascii_hexdigit()) {
-        return Err("non-hex character in input".into());
-    }
-    bytes
-        .chunks_exact(2)
-        .map(|pair| {
-            // SAFETY: `pair` is two ASCII hex bytes, validated above.
-            let s = std::str::from_utf8(pair).expect("ASCII hex");
-            u8::from_str_radix(s, 16).map_err(|e| format!("invalid hex: {}", e))
-        })
-        .collect()
 }

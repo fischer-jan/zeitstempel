@@ -1,7 +1,8 @@
-/// Binary .ots format writer — the inverse of parser.rs.
-///
-/// Builds .ots proof files by writing the header, varuint-encoded
-/// lengths, operation tags, and raw byte payloads into a Vec<u8>.
+//! Binary .ots format writer — the inverse of parser.rs.
+//!
+//! Builds .ots proof files by writing the header, varuint-encoded
+//! lengths, operation tags, and raw byte payloads into a Vec<u8>.
+
 use crate::parser::{self, Attestation, HashOp, Operation, OtsFile, Timestamp};
 
 /// Write the 31-byte OTS magic header.

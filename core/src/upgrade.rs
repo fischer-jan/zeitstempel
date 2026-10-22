@@ -1,11 +1,12 @@
-/// Upgrade logic — replace pending calendar attestations with completed Bitcoin proofs.
-///
-/// When you `stamp` a file, the calendar server returns a "pending" attestation:
-/// your digest was submitted but not yet anchored to the Bitcoin blockchain.
-/// After a few hours (1-3 Bitcoin blocks), the proof chain is complete.
-///
-/// The `upgrade` command contacts the calendar server, fetches the completed
-/// sub-tree, and replaces the pending attestation in the .ots file.
+//! Upgrade logic — replace pending calendar attestations with completed Bitcoin proofs.
+//!
+//! When you `stamp` a file, the calendar server returns a "pending" attestation:
+//! your digest was submitted but not yet anchored to the Bitcoin blockchain.
+//! After a few hours (1-3 Bitcoin blocks), the proof chain is complete.
+//!
+//! The `upgrade` command contacts the calendar server, fetches the completed
+//! sub-tree, and replaces the pending attestation in the .ots file.
+
 use std::fmt;
 use std::io::Read;
 use std::thread;

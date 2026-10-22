@@ -1,12 +1,13 @@
+//! Stamping logic — hash a file and submit to OpenTimestamps calendar servers.
+//!
+//! The stamping flow:
+//!   1. SHA256-hash the file
+//!   2. Generate a 16-byte random nonce (privacy protection)
+//!   3. Compute calendar_digest = SHA256(nonce || file_digest)
+//!   4. POST the 32-byte calendar_digest to calendar server(s)
+//!   5. Build the .ots binary from header + operations + calendar responses
+
 use sha2::{Digest, Sha256};
-/// Stamping logic — hash a file and submit to OpenTimestamps calendar servers.
-///
-/// The stamping flow:
-///   1. SHA256-hash the file
-///   2. Generate a 16-byte random nonce (privacy protection)
-///   3. Compute calendar_digest = SHA256(nonce || file_digest)
-///   4. POST the 32-byte calendar_digest to calendar server(s)
-///   5. Build the .ots binary from header + operations + calendar responses
 use std::fmt;
 use std::io::Read;
 
@@ -53,8 +54,8 @@ pub fn stamp_file(file_data: &[u8]) -> Result<Vec<u8>, StampError> {
 
     // 3. Compute calendar digest: SHA256(nonce || file_digest)
     let mut hasher = Sha256::new();
-    hasher.update(&nonce);
-    hasher.update(&file_digest);
+    hasher.update(nonce);
+    hasher.update(file_digest);
     let calendar_digest = hasher.finalize();
 
     // 4. Submit to calendar servers in parallel-ish (sequential with short timeout)
@@ -165,8 +166,8 @@ mod tests {
         let nonce = [0u8; 16]; // zero nonce for reproducibility
 
         let mut hasher = Sha256::new();
-        hasher.update(&nonce);
-        hasher.update(&file_digest);
+        hasher.update(nonce);
+        hasher.update(file_digest);
         let calendar_digest = hasher.finalize();
 
         // Should be 32 bytes

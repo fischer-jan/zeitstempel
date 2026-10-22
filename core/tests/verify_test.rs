@@ -1,7 +1,8 @@
-/// Integration tests for zeitstempel.
-///
-/// These test the full verification pipeline from file -> parse -> verify.
-/// The Bitcoin API tests require network access.
+//! Integration tests for zeitstempel.
+//!
+//! These test the full verification pipeline from file -> parse -> verify.
+//! The Bitcoin API tests require network access.
+
 use std::process::Command;
 
 /// Helper: run zeitstempel as a subprocess and capture output.

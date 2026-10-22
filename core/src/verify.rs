@@ -1,7 +1,8 @@
+//! Verification logic — hash the input file, walk the proof tree,
+//! and check attestations against the Bitcoin blockchain.
+
 use crate::bitcoin;
 use crate::operations;
-/// Verification logic — hash the input file, walk the proof tree,
-/// and check attestations against the Bitcoin blockchain.
 use crate::parser::{self, Attestation, OtsFile, Timestamp};
 
 /// Result of verifying one attestation path.
@@ -129,6 +130,44 @@ fn check_attestation(att: &Attestation, msg: &[u8]) -> VerifyResult {
     }
 }
 
+/// Verify a Bitcoin attestation by checking the merkle root.
+fn verify_bitcoin(height: u64, msg: &[u8]) -> VerifyResult {
+    // Fetch block info from the API
+    let block_info = match bitcoin::get_block_info(height) {
+        Ok(info) => info,
+        Err(e) => {
+            return VerifyResult::Error {
+                message: format!("Could not fetch Bitcoin block #{}: {}", height, e),
+            };
+        }
+    };
+
+    // Convert API merkle root (big-endian hex) to little-endian bytes
+    let expected_le = match bitcoin::merkle_root_to_le_bytes(&block_info.merkle_root) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return VerifyResult::Error {
+                message: format!("Bad merkle root from API: {}", e),
+            };
+        }
+    };
+
+    // Compare!
+    if msg == expected_le.as_slice() {
+        VerifyResult::BitcoinVerified {
+            height,
+            block_hash: block_info.block_hash,
+            timestamp: block_info.timestamp,
+        }
+    } else {
+        VerifyResult::Failed {
+            height,
+            expected: expected_le,
+            got: msg.to_vec(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,43 +210,5 @@ mod tests {
             matches!(&results[0], VerifyResult::Error { message } if message.contains("refusing to continue")),
             "expected a message-size error result",
         );
-    }
-}
-
-/// Verify a Bitcoin attestation by checking the merkle root.
-fn verify_bitcoin(height: u64, msg: &[u8]) -> VerifyResult {
-    // Fetch block info from the API
-    let block_info = match bitcoin::get_block_info(height) {
-        Ok(info) => info,
-        Err(e) => {
-            return VerifyResult::Error {
-                message: format!("Could not fetch Bitcoin block #{}: {}", height, e),
-            };
-        }
-    };
-
-    // Convert API merkle root (big-endian hex) to little-endian bytes
-    let expected_le = match bitcoin::merkle_root_to_le_bytes(&block_info.merkle_root) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            return VerifyResult::Error {
-                message: format!("Bad merkle root from API: {}", e),
-            };
-        }
-    };
-
-    // Compare!
-    if msg == expected_le.as_slice() {
-        VerifyResult::BitcoinVerified {
-            height,
-            block_hash: block_info.block_hash,
-            timestamp: block_info.timestamp,
-        }
-    } else {
-        VerifyResult::Failed {
-            height,
-            expected: expected_le,
-            got: msg.to_vec(),
-        }
     }
 }
