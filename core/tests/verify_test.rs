@@ -1,21 +1,38 @@
 //! Integration tests for zeitstempel.
 //!
 //! These test the full verification pipeline from file -> parse -> verify.
-//! The Bitcoin API tests require network access.
+//! Every run talks to a local fixture server (see `common`), never to
+//! the live Bitcoin APIs or calendar servers.
 
+mod common;
+
+use common::FixtureServer;
 use std::process::Command;
 
-/// Helper: run zeitstempel as a subprocess and capture output.
-fn run_zeitstempel(args: &[&str]) -> (i32, String, String) {
+/// Helper: run zeitstempel as a subprocess against a fresh fixture
+/// server. Returns exit code, stdout, stderr and the requests served.
+fn run_with_fixtures(args: &[&str]) -> (i32, String, String, Vec<String>) {
+    let server = FixtureServer::start();
+    // Two calendar entries, like the real default list, so stamp
+    // exercises the fork path for multiple calendar responses.
+    let calendars = format!("{0},{0}", server.base_url);
     let output = Command::new("cargo")
         .args(["run", "--quiet", "--"])
         .args(args)
+        .env("ZEITSTEMPEL_BITCOIN_API", &server.base_url)
+        .env("ZEITSTEMPEL_CALENDARS", calendars)
         .output()
         .expect("failed to execute zeitstempel");
 
     let code = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    (code, stdout, stderr, server.requests())
+}
+
+/// Helper: like `run_with_fixtures`, for tests that don't check requests.
+fn run_zeitstempel(args: &[&str]) -> (i32, String, String) {
+    let (code, stdout, stderr, _) = run_with_fixtures(args);
     (code, stdout, stderr)
 }
 
@@ -96,10 +113,11 @@ fn test_legacy_bare_two_arg_form() {
     assert!(stdout.contains("Verified!"));
 }
 
-/// Full verification via the verify subcommand against the Bitcoin blockchain.
+/// Full verification via the verify subcommand against the recorded
+/// Bitcoin block (golden fixture of block 358391).
 #[test]
 fn test_full_bitcoin_verification() {
-    let (code, stdout, _) = run_zeitstempel(&[
+    let (code, stdout, _, requests) = run_with_fixtures(&[
         "verify",
         "tests/fixtures/hello-world.txt",
         "tests/fixtures/hello-world.txt.ots",
@@ -108,6 +126,14 @@ fn test_full_bitcoin_verification() {
     assert!(stdout.contains("Verified!"));
     assert!(stdout.contains("358391"));
     assert!(stdout.contains("Merkle root match confirmed"));
+    assert_eq!(
+        requests,
+        vec![
+            "GET /block-height/358391".to_string(),
+            format!("GET /block/{}", common::HELLO_WORLD_BLOCK_HASH),
+        ],
+        "verification should use the block fixtures and nothing else"
+    );
 }
 
 // ── Stamp subcommand tests ───────────────────────────────────────
@@ -124,13 +150,18 @@ fn test_stamp_creates_ots_file() {
 
     std::fs::write(&input, b"Stamp integration test\n").unwrap();
 
-    let (code, stdout, stderr) = run_zeitstempel(&["stamp", input.to_str().unwrap()]);
+    let (code, stdout, stderr, requests) = run_with_fixtures(&["stamp", input.to_str().unwrap()]);
     assert_eq!(code, 0, "stamp should succeed. stderr: {}", stderr);
     assert!(
         stdout.contains("Timestamp proof created"),
         "should confirm creation"
     );
     assert!(ots.exists(), ".ots file should exist");
+    assert_eq!(
+        requests,
+        vec!["POST /digest", "POST /digest"],
+        "stamp should submit to both fixture calendars"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();

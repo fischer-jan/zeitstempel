@@ -8,6 +8,7 @@
 //! same crate and by the sibling `zeitstempel-gui` crate.
 
 pub mod bitcoin;
+pub mod endpoints;
 pub mod operations;
 pub mod parser;
 pub mod stamp;

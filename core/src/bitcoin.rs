@@ -19,6 +19,7 @@ pub struct BlockInfo {
 
 #[derive(Debug)]
 pub enum ApiError {
+    Config(String),
     Http(String),
     Parse(String),
 }
@@ -26,6 +27,7 @@ pub enum ApiError {
 impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ApiError::Config(msg) => write!(f, "configuration error: {}", msg),
             ApiError::Http(msg) => write!(f, "HTTP error: {}", msg),
             ApiError::Parse(msg) => write!(f, "parse error: {}", msg),
         }
@@ -36,12 +38,21 @@ impl std::error::Error for ApiError {}
 
 /// Fetch block info for a given block height.
 ///
-/// Tries Blockstream.info first, falls back to mempool.space.
+/// Tries each API from `endpoints::bitcoin_apis()` in turn
+/// (Blockstream.info, then mempool.space) and returns the first success.
 pub fn get_block_info(height: u64) -> Result<BlockInfo, ApiError> {
-    get_block_info_from("https://blockstream.info/api", height).or_else(|_| {
-        eprintln!("  (Blockstream unavailable, trying mempool.space...)");
-        get_block_info_from("https://mempool.space/api", height)
-    })
+    let apis = crate::endpoints::bitcoin_apis().map_err(ApiError::Config)?;
+    let mut last_err = None;
+    for (i, base_url) in apis.iter().enumerate() {
+        if i > 0 {
+            eprintln!("  ({} unavailable, trying {}...)", apis[i - 1], base_url);
+        }
+        match get_block_info_from(base_url, height) {
+            Ok(info) => return Ok(info),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(last_err.expect("bitcoin_apis() never returns an empty list"))
 }
 
 fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiError> {

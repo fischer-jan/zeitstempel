@@ -11,17 +11,13 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::Read;
 
+use crate::endpoints;
 use crate::parser;
 use crate::writer;
 
-/// Calendar servers to submit to (first two for speed).
-const CALENDAR_SERVERS: &[&str] = &[
-    "https://alice.btc.calendar.opentimestamps.org",
-    "https://bob.btc.calendar.opentimestamps.org",
-];
-
 #[derive(Debug)]
 pub enum StampError {
+    Config(String),
     NoCalendarResponse(String),
     Http(String),
     Rng(String),
@@ -30,6 +26,7 @@ pub enum StampError {
 impl fmt::Display for StampError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            StampError::Config(msg) => write!(f, "configuration error: {}", msg),
             StampError::NoCalendarResponse(msg) => {
                 write!(f, "no calendar server responded: {}", msg)
             }
@@ -45,6 +42,8 @@ impl std::error::Error for StampError {}
 ///
 /// The returned bytes can be written directly to a `.ots` file.
 pub fn stamp_file(file_data: &[u8]) -> Result<Vec<u8>, StampError> {
+    let servers = endpoints::calendars().map_err(StampError::Config)?;
+
     // 1. Compute file digest
     let file_digest = Sha256::digest(file_data);
 
@@ -62,7 +61,7 @@ pub fn stamp_file(file_data: &[u8]) -> Result<Vec<u8>, StampError> {
     let mut responses: Vec<(&str, Vec<u8>)> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
 
-    for server in CALENDAR_SERVERS {
+    for server in &servers {
         match submit_to_calendar(server, &calendar_digest) {
             // Only embed responses that parse as a valid timestamp
             // tree — a broken or malicious calendar response would
