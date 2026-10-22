@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 /// Stamping logic — hash a file and submit to OpenTimestamps calendar servers.
 ///
 /// The stamping flow:
@@ -6,10 +7,8 @@
 ///   3. Compute calendar_digest = SHA256(nonce || file_digest)
 ///   4. POST the 32-byte calendar_digest to calendar server(s)
 ///   5. Build the .ots binary from header + operations + calendar responses
-
 use std::fmt;
 use std::io::Read;
-use sha2::{Sha256, Digest};
 
 use crate::parser;
 use crate::writer;
@@ -30,7 +29,9 @@ pub enum StampError {
 impl fmt::Display for StampError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StampError::NoCalendarResponse(msg) => write!(f, "no calendar server responded: {}", msg),
+            StampError::NoCalendarResponse(msg) => {
+                write!(f, "no calendar server responded: {}", msg)
+            }
             StampError::Http(msg) => write!(f, "HTTP error: {}", msg),
             StampError::Rng(msg) => write!(f, "random number generation failed: {}", msg),
         }
@@ -48,8 +49,7 @@ pub fn stamp_file(file_data: &[u8]) -> Result<Vec<u8>, StampError> {
 
     // 2. Generate 16-byte random nonce for privacy
     let mut nonce = [0u8; 16];
-    getrandom::getrandom(&mut nonce)
-        .map_err(|e| StampError::Rng(format!("{}", e)))?;
+    getrandom::getrandom(&mut nonce).map_err(|e| StampError::Rng(format!("{}", e)))?;
 
     // 3. Compute calendar digest: SHA256(nonce || file_digest)
     let mut hasher = Sha256::new();
@@ -129,7 +129,8 @@ fn submit_to_calendar(server: &str, digest: &[u8]) -> Result<Vec<u8>, StampError
         .map_err(|e| StampError::Http(format!("{}: {}", url, e)))?;
 
     let mut body = Vec::new();
-    response.into_reader()
+    response
+        .into_reader()
         .take(65536) // 64KB max — calendar responses are typically ~4KB
         .read_to_end(&mut body)
         .map_err(|e| StampError::Http(format!("reading response from {}: {}", url, e)))?;

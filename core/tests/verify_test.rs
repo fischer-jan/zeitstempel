@@ -2,7 +2,6 @@
 ///
 /// These test the full verification pipeline from file -> parse -> verify.
 /// The Bitcoin API tests require network access.
-
 use std::process::Command;
 
 /// Helper: run zeitstempel as a subprocess and capture output.
@@ -57,7 +56,11 @@ fn test_verify_wrong_file() {
 
 #[test]
 fn test_verify_missing_file() {
-    let (code, _, stderr) = run_zeitstempel(&["verify", "nonexistent.txt", "tests/fixtures/hello-world.txt.ots"]);
+    let (code, _, stderr) = run_zeitstempel(&[
+        "verify",
+        "nonexistent.txt",
+        "tests/fixtures/hello-world.txt.ots",
+    ]);
     assert_ne!(code, 0);
     assert!(stderr.contains("Error reading"));
 }
@@ -120,12 +123,12 @@ fn test_stamp_creates_ots_file() {
 
     std::fs::write(&input, b"Stamp integration test\n").unwrap();
 
-    let (code, stdout, stderr) = run_zeitstempel(&[
-        "stamp",
-        input.to_str().unwrap(),
-    ]);
+    let (code, stdout, stderr) = run_zeitstempel(&["stamp", input.to_str().unwrap()]);
     assert_eq!(code, 0, "stamp should succeed. stderr: {}", stderr);
-    assert!(stdout.contains("Timestamp proof created"), "should confirm creation");
+    assert!(
+        stdout.contains("Timestamp proof created"),
+        "should confirm creation"
+    );
     assert!(ots.exists(), ".ots file should exist");
 
     // Clean up
@@ -153,9 +156,15 @@ fn test_stamp_then_info_shows_pending() {
     // Inspect with info — should show Pending attestation(s)
     let (code, stdout, _) = run_zeitstempel(&["info", ots.to_str().unwrap()]);
     assert_eq!(code, 0, "info should succeed");
-    assert!(stdout.contains("Pending"), "should show Pending attestation");
+    assert!(
+        stdout.contains("Pending"),
+        "should show Pending attestation"
+    );
     assert!(stdout.contains("SHA256"), "should show SHA256 hash op");
-    assert!(stdout.contains("calendar.opentimestamps.org"), "should show calendar URI");
+    assert!(
+        stdout.contains("calendar.opentimestamps.org"),
+        "should show calendar URI"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -182,14 +191,18 @@ fn test_stamp_then_verify_digest_matches() {
     // Digest matches but the proof is pending — exit 2 means "not
     // verified yet", distinct from both success (0) and failure (1),
     // so scripts can't mistake a pending proof for a verified one.
-    let (code, stdout, stderr) = run_zeitstempel(&[
-        "verify",
-        input.to_str().unwrap(),
-        ots.to_str().unwrap(),
-    ]);
-    assert_eq!(code, 2, "pending-only verify should exit 2. stderr: {}", stderr);
+    let (code, stdout, stderr) =
+        run_zeitstempel(&["verify", input.to_str().unwrap(), ots.to_str().unwrap()]);
+    assert_eq!(
+        code, 2,
+        "pending-only verify should exit 2. stderr: {}",
+        stderr
+    );
     assert!(stdout.contains("Pending"), "should show Pending status");
-    assert!(stdout.contains("Not verified"), "should state it is not verified");
+    assert!(
+        stdout.contains("Not verified"),
+        "should state it is not verified"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -210,7 +223,10 @@ fn test_stamp_refuses_to_overwrite() {
 
     let (code, _, stderr) = run_zeitstempel(&["stamp", input.to_str().unwrap()]);
     assert_ne!(code, 0, "stamp should refuse to overwrite");
-    assert!(stderr.contains("already exists"), "should warn about existing file");
+    assert!(
+        stderr.contains("already exists"),
+        "should warn about existing file"
+    );
 
     // Clean up
     std::fs::remove_file(&input).ok();
@@ -229,7 +245,10 @@ fn test_stamp_missing_file() {
 fn test_help_includes_stamp() {
     let (code, stdout, _) = run_zeitstempel(&["--help"]);
     assert_eq!(code, 0);
-    assert!(stdout.contains("stamp"), "help should mention stamp subcommand");
+    assert!(
+        stdout.contains("stamp"),
+        "help should mention stamp subcommand"
+    );
 }
 
 // ── Upgrade subcommand tests ──────────────────────────────────────
@@ -245,7 +264,10 @@ fn test_upgrade_no_args_shows_usage() {
 fn test_upgrade_missing_file() {
     let (code, _, stderr) = run_zeitstempel(&["upgrade", "nonexistent.ots"]);
     assert_ne!(code, 0);
-    assert!(stderr.contains("Error"), "should report error for missing file");
+    assert!(
+        stderr.contains("Error"),
+        "should report error for missing file"
+    );
 }
 
 #[test]
@@ -277,7 +299,10 @@ fn test_upgrade_invalid_ots() {
 fn test_help_includes_upgrade() {
     let (code, stdout, _) = run_zeitstempel(&["--help"]);
     assert_eq!(code, 0);
-    assert!(stdout.contains("upgrade"), "help should mention upgrade subcommand");
+    assert!(
+        stdout.contains("upgrade"),
+        "help should mention upgrade subcommand"
+    );
 }
 
 #[test]
@@ -321,7 +346,9 @@ fn test_info_golden_pending_fixture() {
     );
     // Must NOT contain corrupted URIs
     assert!(
-        !stdout.contains("Pending (-") && !stdout.contains("Pending (+") && !stdout.contains("Pending (("),
+        !stdout.contains("Pending (-")
+            && !stdout.contains("Pending (+")
+            && !stdout.contains("Pending (("),
         "Pending URIs should not have prefix bytes, got:\n{}",
         stdout,
     );

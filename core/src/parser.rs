@@ -6,32 +6,32 @@
 /// The timestamp tree is recursive: operations chain together, `0xFF`
 /// marks forks (multiple paths from one node), and attestations are
 /// the leaves (Bitcoin block anchors, pending calendar URIs, etc.).
-
 use std::fmt;
 
 // ── Magic header (31 bytes) ────────────────────────────────────────
 /// Every .ots file starts with these exact 31 bytes.
-pub const HEADER_MAGIC: &[u8] = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94";
+pub const HEADER_MAGIC: &[u8] =
+    b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94";
 
 // ── Tag bytes for operations ───────────────────────────────────────
-pub const TAG_APPEND:    u8 = 0xf0;
-pub const TAG_PREPEND:   u8 = 0xf1;
-pub const TAG_REVERSE:   u8 = 0xf2;
-pub const TAG_HEXLIFY:   u8 = 0xf3;
-pub const TAG_SHA1:      u8 = 0x02;
+pub const TAG_APPEND: u8 = 0xf0;
+pub const TAG_PREPEND: u8 = 0xf1;
+pub const TAG_REVERSE: u8 = 0xf2;
+pub const TAG_HEXLIFY: u8 = 0xf3;
+pub const TAG_SHA1: u8 = 0x02;
 pub const TAG_RIPEMD160: u8 = 0x03;
-pub const TAG_SHA256:    u8 = 0x08;
+pub const TAG_SHA256: u8 = 0x08;
 pub const TAG_KECCAK256: u8 = 0x67;
 
 // ── Special markers ────────────────────────────────────────────────
 pub const TAG_ATTESTATION: u8 = 0x00;
-pub const TAG_FORK:        u8 = 0xff;
+pub const TAG_FORK: u8 = 0xff;
 
 // ── Attestation type tags (8 bytes each) ───────────────────────────
-pub const ATT_TAG_BITCOIN:  [u8; 8] = [0x05, 0x88, 0x96, 0x0d, 0x73, 0xd7, 0x19, 0x01];
+pub const ATT_TAG_BITCOIN: [u8; 8] = [0x05, 0x88, 0x96, 0x0d, 0x73, 0xd7, 0x19, 0x01];
 pub const ATT_TAG_LITECOIN: [u8; 8] = [0x06, 0x86, 0x9a, 0x0d, 0x73, 0xd7, 0x1b, 0x45];
 pub const ATT_TAG_ETHEREUM: [u8; 8] = [0x30, 0xfe, 0x80, 0x87, 0xb5, 0xc7, 0xea, 0xd7];
-pub const ATT_TAG_PENDING:  [u8; 8] = [0x83, 0xdf, 0xe3, 0x0d, 0x2e, 0xf9, 0x0c, 0x8e];
+pub const ATT_TAG_PENDING: [u8; 8] = [0x83, 0xdf, 0xe3, 0x0d, 0x2e, 0xf9, 0x0c, 0x8e];
 
 // ── Data structures ────────────────────────────────────────────────
 
@@ -66,8 +66,8 @@ impl HashOp {
 impl fmt::Display for HashOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            HashOp::Sha256    => write!(f, "SHA256"),
-            HashOp::Sha1      => write!(f, "SHA1"),
+            HashOp::Sha256 => write!(f, "SHA256"),
+            HashOp::Sha1 => write!(f, "SHA1"),
             HashOp::Ripemd160 => write!(f, "RIPEMD160"),
             HashOp::Keccak256 => write!(f, "KECCAK256"),
         }
@@ -101,14 +101,14 @@ pub enum Operation {
 impl fmt::Display for Operation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Operation::Append(data)  => write!(f, "append({})", hex(data)),
+            Operation::Append(data) => write!(f, "append({})", hex(data)),
             Operation::Prepend(data) => write!(f, "prepend({})", hex(data)),
-            Operation::Sha256        => write!(f, "SHA256"),
-            Operation::Sha1          => write!(f, "SHA1"),
-            Operation::Ripemd160     => write!(f, "RIPEMD160"),
-            Operation::Keccak256     => write!(f, "KECCAK256"),
-            Operation::Reverse       => write!(f, "reverse"),
-            Operation::Hexlify       => write!(f, "hexlify"),
+            Operation::Sha256 => write!(f, "SHA256"),
+            Operation::Sha1 => write!(f, "SHA1"),
+            Operation::Ripemd160 => write!(f, "RIPEMD160"),
+            Operation::Keccak256 => write!(f, "KECCAK256"),
+            Operation::Reverse => write!(f, "reverse"),
+            Operation::Hexlify => write!(f, "hexlify"),
         }
     }
 }
@@ -116,21 +116,23 @@ impl fmt::Display for Operation {
 /// A leaf attestation — the proof endpoint.
 #[derive(Debug, Clone)]
 pub enum Attestation {
-    Bitcoin  { height: u64 },
+    Bitcoin { height: u64 },
     Litecoin { height: u64 },
     Ethereum { height: u64 },
-    Pending  { uri: String },
-    Unknown  { tag: [u8; 8], payload: Vec<u8> },
+    Pending { uri: String },
+    Unknown { tag: [u8; 8], payload: Vec<u8> },
 }
 
 impl fmt::Display for Attestation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Attestation::Bitcoin  { height } => write!(f, "Bitcoin block #{}", height),
+            Attestation::Bitcoin { height } => write!(f, "Bitcoin block #{}", height),
             Attestation::Litecoin { height } => write!(f, "Litecoin block #{}", height),
             Attestation::Ethereum { height } => write!(f, "Ethereum block #{}", height),
-            Attestation::Pending  { uri }    => write!(f, "Pending ({})", uri),
-            Attestation::Unknown  { tag, .. } => write!(f, "Unknown attestation (tag: {})", hex(tag)),
+            Attestation::Pending { uri } => write!(f, "Pending ({})", uri),
+            Attestation::Unknown { tag, .. } => {
+                write!(f, "Unknown attestation (tag: {})", hex(tag))
+            }
         }
     }
 }
@@ -233,11 +235,11 @@ pub enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::BadMagic             => write!(f, "not a valid .ots file (bad magic header)"),
+            ParseError::BadMagic => write!(f, "not a valid .ots file (bad magic header)"),
             ParseError::UnsupportedVersion(v) => write!(f, "unsupported .ots version: {}", v),
-            ParseError::UnknownHashOp(b)     => write!(f, "unknown hash operation tag: 0x{:02x}", b),
-            ParseError::UnexpectedEof(ctx)   => write!(f, "unexpected end of file in {}", ctx),
-            ParseError::InvalidData(msg)     => write!(f, "invalid data: {}", msg),
+            ParseError::UnknownHashOp(b) => write!(f, "unknown hash operation tag: 0x{:02x}", b),
+            ParseError::UnexpectedEof(ctx) => write!(f, "unexpected end of file in {}", ctx),
+            ParseError::InvalidData(msg) => write!(f, "invalid data: {}", msg),
         }
     }
 }
@@ -272,18 +274,22 @@ pub fn parse_ots(data: &[u8]) -> Result<OtsFile, ParseError> {
     // 5. Parse the recursive timestamp tree
     let timestamp = parse_timestamp(&mut p)?;
 
-    Ok(OtsFile { hash_op, file_digest, timestamp })
+    Ok(OtsFile {
+        hash_op,
+        file_digest,
+        timestamp,
+    })
 }
 
 // ── Internal parsing helpers ───────────────────────────────────────
 
 fn parse_hash_op(tag: u8) -> Result<HashOp, ParseError> {
     match tag {
-        TAG_SHA256    => Ok(HashOp::Sha256),
-        TAG_SHA1      => Ok(HashOp::Sha1),
+        TAG_SHA256 => Ok(HashOp::Sha256),
+        TAG_SHA1 => Ok(HashOp::Sha1),
         TAG_RIPEMD160 => Ok(HashOp::Ripemd160),
         TAG_KECCAK256 => Ok(HashOp::Keccak256),
-        other         => Err(ParseError::UnknownHashOp(other)),
+        other => Err(ParseError::UnknownHashOp(other)),
     }
 }
 
@@ -311,7 +317,9 @@ fn parse_timestamp(p: &mut Parser) -> Result<Timestamp, ParseError> {
 
 fn parse_timestamp_inner(p: &mut Parser, depth: usize) -> Result<Timestamp, ParseError> {
     if depth > MAX_DEPTH {
-        return Err(ParseError::InvalidData("timestamp tree exceeds maximum depth"));
+        return Err(ParseError::InvalidData(
+            "timestamp tree exceeds maximum depth",
+        ));
     }
 
     let mut attestations = Vec::new();
@@ -357,19 +365,22 @@ fn parse_timestamp_branch(
 fn parse_operation(p: &mut Parser) -> Result<Operation, ParseError> {
     let tag = p.read_byte()?;
     match tag {
-        TAG_APPEND    => Ok(Operation::Append(p.read_varbytes()?)),
-        TAG_PREPEND   => Ok(Operation::Prepend(p.read_varbytes()?)),
-        TAG_REVERSE   => Ok(Operation::Reverse),
-        TAG_HEXLIFY   => Ok(Operation::Hexlify),
-        TAG_SHA256    => Ok(Operation::Sha256),
-        TAG_SHA1      => Ok(Operation::Sha1),
+        TAG_APPEND => Ok(Operation::Append(p.read_varbytes()?)),
+        TAG_PREPEND => Ok(Operation::Prepend(p.read_varbytes()?)),
+        TAG_REVERSE => Ok(Operation::Reverse),
+        TAG_HEXLIFY => Ok(Operation::Hexlify),
+        TAG_SHA256 => Ok(Operation::Sha256),
+        TAG_SHA1 => Ok(Operation::Sha1),
         TAG_RIPEMD160 => Ok(Operation::Ripemd160),
         TAG_KECCAK256 => Ok(Operation::Keccak256),
-        other         => Err(ParseError::InvalidData(
+        other => Err(ParseError::InvalidData(
             // We can't format a dynamic string here without alloc trickery,
             // so just report it as an unknown op tag generically.
-            if other < 0x10 { "unknown low operation tag" }
-            else { "unknown operation tag" }
+            if other < 0x10 {
+                "unknown low operation tag"
+            } else {
+                "unknown operation tag"
+            },
         )),
     }
 }
@@ -418,7 +429,8 @@ fn parse_attestation(p: &mut Parser) -> Result<Attestation, ParseError> {
 /// path, query, fragment, port, or user-info. That matches every
 /// real-world calendar URI (e.g. `https://alice.btc.calendar.opentimestamps.org`).
 fn validate_calendar_uri(uri: &str) -> Result<(), ParseError> {
-    let rest = uri.strip_prefix("https://")
+    let rest = uri
+        .strip_prefix("https://")
         .ok_or(ParseError::InvalidData("pending URI must use https scheme"))?;
 
     // Anything after a single trailing slash is a path — disallowed.
@@ -426,38 +438,62 @@ fn validate_calendar_uri(uri: &str) -> Result<(), ParseError> {
         None => rest,
         Some(idx) => {
             if &rest[idx..] != "/" {
-                return Err(ParseError::InvalidData("pending URI must not contain a path"));
+                return Err(ParseError::InvalidData(
+                    "pending URI must not contain a path",
+                ));
             }
             &rest[..idx]
         }
     };
 
     if host.contains('?') || host.contains('#') {
-        return Err(ParseError::InvalidData("pending URI must not contain a query or fragment"));
+        return Err(ParseError::InvalidData(
+            "pending URI must not contain a query or fragment",
+        ));
     }
     if host.contains('@') {
-        return Err(ParseError::InvalidData("pending URI must not contain user info"));
+        return Err(ParseError::InvalidData(
+            "pending URI must not contain user info",
+        ));
     }
     if host.contains(':') || host.contains('[') || host.contains(']') {
-        return Err(ParseError::InvalidData("pending URI must not contain a port or IPv6 literal"));
+        return Err(ParseError::InvalidData(
+            "pending URI must not contain a port or IPv6 literal",
+        ));
     }
-    if !host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') {
-        return Err(ParseError::InvalidData("pending URI host contains invalid characters"));
+    if !host
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return Err(ParseError::InvalidData(
+            "pending URI host contains invalid characters",
+        ));
     }
     if host.is_empty() || host.len() > 253 {
-        return Err(ParseError::InvalidData("pending URI host has invalid length"));
+        return Err(ParseError::InvalidData(
+            "pending URI host has invalid length",
+        ));
     }
     if !host.contains('.') {
-        return Err(ParseError::InvalidData("pending URI host must be a registrable domain"));
+        return Err(ParseError::InvalidData(
+            "pending URI host must be a registrable domain",
+        ));
     }
     // Reject IPv4 literals (every dot-separated label is purely digits).
-    if host.split('.').all(|label| !label.is_empty() && label.bytes().all(|b| b.is_ascii_digit())) {
-        return Err(ParseError::InvalidData("pending URI must not target an IPv4 literal"));
+    if host
+        .split('.')
+        .all(|label| !label.is_empty() && label.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return Err(ParseError::InvalidData(
+            "pending URI must not target an IPv4 literal",
+        ));
     }
     // Reject localhost
     let lower = host.to_ascii_lowercase();
     if lower == "localhost" || lower.ends_with(".localhost") {
-        return Err(ParseError::InvalidData("pending URI must not target localhost"));
+        return Err(ParseError::InvalidData(
+            "pending URI must not target localhost",
+        ));
     }
     Ok(())
 }
@@ -488,7 +524,7 @@ pub fn hex(bytes: &[u8]) -> String {
 /// glance.
 pub fn print_info(ots: &OtsFile) {
     println!("File hash: {} ({})", hex(&ots.file_digest), ots.hash_op);
-    println!("\u{2502}");                          // │
+    println!("\u{2502}"); // │
     print_timestamp_tree(&ots.timestamp, "");
 }
 
@@ -506,18 +542,28 @@ fn print_timestamp_tree(ts: &Timestamp, prefix: &str) {
 
     for att in &ts.attestations {
         let is_last = index == total - 1;
-        let connector = if is_last { "\u{2514}\u{2500}\u{2500} " }   // └──
-                        else       { "\u{251C}\u{2500}\u{2500} " };   // ├──
+        let connector = if is_last {
+            "\u{2514}\u{2500}\u{2500} "
+        }
+        // └──
+        else {
+            "\u{251C}\u{2500}\u{2500} "
+        }; // ├──
         println!("{}{}{}", prefix, connector, att);
         index += 1;
     }
 
     for (op, child) in &ts.ops {
         let is_last = index == total - 1;
-        let connector  = if is_last { "\u{2514}\u{2500}\u{2500} " }  // └──
-                         else       { "\u{251C}\u{2500}\u{2500} " };  // ├──
-        let extension  = if is_last { "    " }                        // (space)
-                         else       { "\u{2502}   " };                // │
+        let connector = if is_last {
+            "\u{2514}\u{2500}\u{2500} "
+        }
+        // └──
+        else {
+            "\u{251C}\u{2500}\u{2500} "
+        }; // ├──
+        let extension = if is_last { "    " }                        // (space)
+                         else       { "\u{2502}   " }; // │
         println!("{}{}{}", prefix, connector, op);
         print_timestamp_tree(child, &format!("{}{}", prefix, extension));
         index += 1;
@@ -564,7 +610,9 @@ pub mod tests_support {
     }
 
     pub fn make_parser(data: &[u8]) -> TestParser<'_> {
-        TestParser { inner: Parser::new(data) }
+        TestParser {
+            inner: Parser::new(data),
+        }
     }
 }
 
@@ -729,7 +777,9 @@ mod tests {
             hash_op: HashOp::Sha256,
             file_digest: vec![0u8; 32],
             timestamp: Timestamp {
-                attestations: vec![Attestation::Pending { uri: uri.to_string() }],
+                attestations: vec![Attestation::Pending {
+                    uri: uri.to_string(),
+                }],
                 ops: vec![],
             },
         };
@@ -745,18 +795,18 @@ mod tests {
     #[test]
     fn test_calendar_uri_rejects_bad_inputs() {
         let bad = [
-            "http://alice.btc.calendar.opentimestamps.org",  // no TLS
-            "file:///etc/passwd",                             // file scheme
-            "https://127.0.0.1",                              // IPv4 literal
-            "https://169.254.169.254",                        // cloud metadata
-            "https://[::1]",                                  // IPv6 literal
-            "https://localhost",                              // localhost
-            "https://intranet",                               // bare hostname
-            "https://attacker.example/exfil",                 // path
-            "https://attacker.example?x=1",                   // query
-            "https://attacker.example#frag",                  // fragment
-            "https://attacker.example:8080",                  // port
-            "https://user:pw@attacker.example",               // user info
+            "http://alice.btc.calendar.opentimestamps.org", // no TLS
+            "file:///etc/passwd",                           // file scheme
+            "https://127.0.0.1",                            // IPv4 literal
+            "https://169.254.169.254",                      // cloud metadata
+            "https://[::1]",                                // IPv6 literal
+            "https://localhost",                            // localhost
+            "https://intranet",                             // bare hostname
+            "https://attacker.example/exfil",               // path
+            "https://attacker.example?x=1",                 // query
+            "https://attacker.example#frag",                // fragment
+            "https://attacker.example:8080",                // port
+            "https://user:pw@attacker.example",             // user info
         ];
         for uri in bad {
             let bytes = ots_with_pending_uri(uri);
@@ -795,7 +845,11 @@ mod tests {
         collect_pending(&ots.timestamp, &mut uris);
 
         // The reference tool submitted to 4 calendar servers
-        assert!(uris.len() >= 2, "expected at least 2 pending URIs, got {}", uris.len());
+        assert!(
+            uris.len() >= 2,
+            "expected at least 2 pending URIs, got {}",
+            uris.len()
+        );
 
         // Every URI must be a valid https URL — no stray prefix bytes
         for uri in &uris {

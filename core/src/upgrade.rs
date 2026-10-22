@@ -6,7 +6,6 @@
 ///
 /// The `upgrade` command contacts the calendar server, fetches the completed
 /// sub-tree, and replaces the pending attestation in the .ots file.
-
 use std::fmt;
 use std::io::Read;
 use std::thread;
@@ -74,7 +73,9 @@ const MAX_DEPTH: usize = 256;
 /// calendar server and try to replace it with the completed sub-tree.
 fn upgrade_timestamp(ts: &mut Timestamp, msg: &[u8], result: &mut UpgradeResult, depth: usize) {
     if depth > MAX_DEPTH {
-        result.errors.push("proof tree exceeds maximum depth".into());
+        result
+            .errors
+            .push("proof tree exceeds maximum depth".into());
         return;
     }
     // Process pending attestations — we may need to remove some and add ops
@@ -141,7 +142,11 @@ fn upgrade_timestamp(ts: &mut Timestamp, msg: &[u8], result: &mut UpgradeResult,
 /// - `Ok(None)` if still pending (404 or incomplete response)
 /// - `Err(message)` on network/parse errors
 fn fetch_upgrade(uri: &str, msg: &[u8]) -> Result<Option<Timestamp>, String> {
-    let url = format!("{}/timestamp/{}", uri.trim_end_matches('/'), parser::hex(msg));
+    let url = format!(
+        "{}/timestamp/{}",
+        uri.trim_end_matches('/'),
+        parser::hex(msg)
+    );
 
     let response = match ureq::get(&url)
         .timeout(Duration::from_secs(15))
@@ -158,7 +163,8 @@ fn fetch_upgrade(uri: &str, msg: &[u8]) -> Result<Option<Timestamp>, String> {
 
     // Read the response body
     let mut body = Vec::new();
-    response.into_reader()
+    response
+        .into_reader()
         .take(1_048_576) // 1MB max
         .read_to_end(&mut body)
         .map_err(|e| format!("Error reading response from {}: {}", uri, e))?;
@@ -290,9 +296,15 @@ fn print_result(result: &UpgradeResult, ots: &OtsFile) {
 
     if result.upgraded > 0 {
         if let Some(height) = find_bitcoin_height(&ots.timestamp) {
-            println!("Upgraded! Attestation now anchored to Bitcoin block #{}.", height);
+            println!(
+                "Upgraded! Attestation now anchored to Bitcoin block #{}.",
+                height
+            );
         } else {
-            println!("Upgraded! {} attestation(s) now anchored to Bitcoin.", result.upgraded);
+            println!(
+                "Upgraded! {} attestation(s) now anchored to Bitcoin.",
+                result.upgraded
+            );
         }
     }
 

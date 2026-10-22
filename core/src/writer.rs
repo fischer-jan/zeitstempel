@@ -2,7 +2,6 @@
 ///
 /// Builds .ots proof files by writing the header, varuint-encoded
 /// lengths, operation tags, and raw byte payloads into a Vec<u8>.
-
 use crate::parser::{self, Attestation, HashOp, Operation, OtsFile, Timestamp};
 
 /// Write the 31-byte OTS magic header.
@@ -34,8 +33,8 @@ pub fn write_varbytes(buf: &mut Vec<u8>, data: &[u8]) {
 /// Write the 1-byte tag for a hash operation.
 pub fn write_hash_op(buf: &mut Vec<u8>, op: HashOp) {
     buf.push(match op {
-        HashOp::Sha256    => parser::TAG_SHA256,
-        HashOp::Sha1      => parser::TAG_SHA1,
+        HashOp::Sha256 => parser::TAG_SHA256,
+        HashOp::Sha1 => parser::TAG_SHA1,
         HashOp::Ripemd160 => parser::TAG_RIPEMD160,
         HashOp::Keccak256 => parser::TAG_KECCAK256,
     });
@@ -96,12 +95,12 @@ pub fn write_operation(buf: &mut Vec<u8>, op: &Operation) {
             buf.push(parser::TAG_PREPEND);
             write_varbytes(buf, data);
         }
-        Operation::Sha256    => buf.push(parser::TAG_SHA256),
-        Operation::Sha1      => buf.push(parser::TAG_SHA1),
+        Operation::Sha256 => buf.push(parser::TAG_SHA256),
+        Operation::Sha1 => buf.push(parser::TAG_SHA1),
         Operation::Ripemd160 => buf.push(parser::TAG_RIPEMD160),
         Operation::Keccak256 => buf.push(parser::TAG_KECCAK256),
-        Operation::Reverse   => buf.push(parser::TAG_REVERSE),
-        Operation::Hexlify   => buf.push(parser::TAG_HEXLIFY),
+        Operation::Reverse => buf.push(parser::TAG_REVERSE),
+        Operation::Hexlify => buf.push(parser::TAG_HEXLIFY),
     }
 }
 
@@ -156,7 +155,12 @@ mod tests {
 
             // Parse back with the parser's decoder
             let mut p = crate::parser::tests_support::make_parser(&buf);
-            assert_eq!(p.read_varuint().unwrap(), val, "roundtrip failed for {}", val);
+            assert_eq!(
+                p.read_varuint().unwrap(),
+                val,
+                "roundtrip failed for {}",
+                val
+            );
         }
     }
 
@@ -168,7 +172,12 @@ mod tests {
             write_varuint(&mut buf, val);
 
             let mut p = crate::parser::tests_support::make_parser(&buf);
-            assert_eq!(p.read_varuint().unwrap(), val, "roundtrip failed for {}", val);
+            assert_eq!(
+                p.read_varuint().unwrap(),
+                val,
+                "roundtrip failed for {}",
+                val
+            );
         }
     }
 
@@ -240,8 +249,8 @@ mod tests {
     #[test]
     fn test_write_ots_roundtrip_hello_world() {
         // Parse the fixture, serialize it back, parse again — should match
-        let original = std::fs::read("tests/fixtures/hello-world.txt.ots")
-            .expect("fixture file missing");
+        let original =
+            std::fs::read("tests/fixtures/hello-world.txt.ots").expect("fixture file missing");
         let ots = parser::parse_ots(&original).expect("failed to parse");
 
         let serialized = write_ots(&ots);
@@ -261,8 +270,8 @@ mod tests {
         // This fixture was created by the reference Python ots tool.
         // A byte-identical roundtrip proves our parser and writer both
         // handle the nested varbytes in pending attestations correctly.
-        let original = std::fs::read("tests/fixtures/golden-pending.txt.ots")
-            .expect("fixture file missing");
+        let original =
+            std::fs::read("tests/fixtures/golden-pending.txt.ots").expect("fixture file missing");
         let ots = parser::parse_ots(&original).expect("failed to parse");
 
         let serialized = write_ots(&ots);

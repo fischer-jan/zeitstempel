@@ -6,12 +6,15 @@
 //!
 //! v1 scope is verify-only. Stamp/upgrade live in the CLI.
 
-#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use iced::widget::{column, container, row, text, Space};
+use iced::widget::{Space, column, container, row, text};
 use iced::{
     Border, Color, Element, Length, Subscription, Task, Theme,
     event::{self, Event},
@@ -60,11 +63,23 @@ enum Status {
 
 #[derive(Clone, Debug)]
 enum Outcome {
-    Verified { block: u64, when: String, hash: String },
-    Failed { block: u64 },
-    Pending { host: String },
-    Skipped { reason: String },
-    Error { message: String },
+    Verified {
+        block: u64,
+        when: String,
+        hash: String,
+    },
+    Failed {
+        block: u64,
+    },
+    Pending {
+        host: String,
+    },
+    Skipped {
+        reason: String,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -110,8 +125,14 @@ impl App {
     }
 
     fn step_animation(&mut self, now: Instant) {
-        let dt = now.duration_since(self.last_tick.unwrap_or(now)).as_secs_f32();
-        let target = if matches!(self.status, Status::Idle) { 0.0 } else { 1.0 };
+        let dt = now
+            .duration_since(self.last_tick.unwrap_or(now))
+            .as_secs_f32();
+        let target = if matches!(self.status, Status::Idle) {
+            0.0
+        } else {
+            1.0
+        };
         let speed = 1.0 / ANIM_DURATION_SECS;
         if self.reveal < target {
             self.reveal = (self.reveal + dt * speed).min(target);
@@ -127,7 +148,11 @@ impl App {
             _ => None,
         });
 
-        let target = if matches!(self.status, Status::Idle) { 0.0 } else { 1.0 };
+        let target = if matches!(self.status, Status::Idle) {
+            0.0
+        } else {
+            1.0
+        };
         let animating = (self.reveal - target).abs() > 0.001;
 
         if animating {
@@ -165,40 +190,63 @@ impl App {
         match &self.status {
             Status::Idle => Space::new().into(),
             Status::Verifying => column![
-                text("Verifying against Bitcoin…").size(15).color(Color::from_rgb(0.3, 0.3, 0.3)),
-                text("Live lookup via blockstream.info").size(11).color(Color::from_rgb(0.55, 0.55, 0.55)),
+                text("Verifying against Bitcoin…")
+                    .size(15)
+                    .color(Color::from_rgb(0.3, 0.3, 0.3)),
+                text("Live lookup via blockstream.info")
+                    .size(11)
+                    .color(Color::from_rgb(0.55, 0.55, 0.55)),
             ]
             .spacing(4)
             .into(),
             Status::Done(Outcome::Verified { block, when, hash }) => column![
-                text("Verified").size(22).color(Color::from_rgb(0.15, 0.55, 0.25)),
+                text("Verified")
+                    .size(22)
+                    .color(Color::from_rgb(0.15, 0.55, 0.25)),
                 text(format!("Block #{block} · {when}")).size(13),
-                text(short_hash(hash)).size(11).color(Color::from_rgb(0.4, 0.4, 0.4)),
+                text(short_hash(hash))
+                    .size(11)
+                    .color(Color::from_rgb(0.4, 0.4, 0.4)),
             ]
             .spacing(6)
             .into(),
             Status::Done(Outcome::Failed { block }) => column![
-                text("Merkle root mismatch").size(18).color(Color::from_rgb(0.7, 0.15, 0.15)),
-                text(format!("Block #{block}: the proof does not match this file.")).size(12),
+                text("Merkle root mismatch")
+                    .size(18)
+                    .color(Color::from_rgb(0.7, 0.15, 0.15)),
+                text(format!(
+                    "Block #{block}: the proof does not match this file."
+                ))
+                .size(12),
             ]
             .spacing(4)
             .into(),
             Status::Done(Outcome::Pending { host }) => column![
-                text("Pending").size(18).color(Color::from_rgb(0.7, 0.5, 0.0)),
-                text(format!("Calendar {host} has the proof but Bitcoin has not anchored it yet.")).size(12),
-                text("Run `zeitstempel upgrade` later, then drop the upgraded .ots here.").size(11)
+                text("Pending")
+                    .size(18)
+                    .color(Color::from_rgb(0.7, 0.5, 0.0)),
+                text(format!(
+                    "Calendar {host} has the proof but Bitcoin has not anchored it yet."
+                ))
+                .size(12),
+                text("Run `zeitstempel upgrade` later, then drop the upgraded .ots here.")
+                    .size(11)
                     .color(Color::from_rgb(0.5, 0.5, 0.5)),
             ]
             .spacing(4)
             .into(),
             Status::Done(Outcome::Skipped { reason }) => column![
-                text("Skipped").size(18).color(Color::from_rgb(0.4, 0.4, 0.4)),
+                text("Skipped")
+                    .size(18)
+                    .color(Color::from_rgb(0.4, 0.4, 0.4)),
                 text(reason.clone()).size(12),
             ]
             .spacing(4)
             .into(),
             Status::Done(Outcome::Error { message }) => column![
-                text("Error").size(18).color(Color::from_rgb(0.7, 0.15, 0.15)),
+                text("Error")
+                    .size(18)
+                    .color(Color::from_rgb(0.7, 0.15, 0.15)),
                 text(message.clone()).size(12),
             ]
             .spacing(4)
@@ -209,8 +257,12 @@ impl App {
 
 fn header<'a>() -> Element<'a, Message> {
     column![
-        text("zeitstempel").size(13).color(Color::from_rgb(0.4, 0.4, 0.4)),
-        text("Drop a file and its .ots proof").size(11).color(Color::from_rgb(0.55, 0.55, 0.55)),
+        text("zeitstempel")
+            .size(13)
+            .color(Color::from_rgb(0.4, 0.4, 0.4)),
+        text("Drop a file and its .ots proof")
+            .size(11)
+            .color(Color::from_rgb(0.55, 0.55, 0.55)),
     ]
     .spacing(2)
     .into()
@@ -224,13 +276,19 @@ fn drop_zone<'a>(label: &'a str, path: Option<&Path>, is_ots: bool) -> Element<'
         .unwrap_or_else(|| format!("Drop {} here", label.to_lowercase()));
 
     let icon = if is_ots { "🔐" } else { "📄" };
-    let primary: String = if filled { display.clone() } else { label.to_string() };
+    let primary: String = if filled {
+        display.clone()
+    } else {
+        label.to_string()
+    };
     let secondary: String = if filled { String::new() } else { display };
 
     let content = column![
         text(icon).size(28),
         text(primary).size(13),
-        text(secondary).size(10).color(Color::from_rgb(0.55, 0.55, 0.55)),
+        text(secondary)
+            .size(10)
+            .color(Color::from_rgb(0.55, 0.55, 0.55)),
     ]
     .spacing(4)
     .align_x(iced::Alignment::Center);
@@ -277,7 +335,8 @@ fn short_hash(hash: &str) -> String {
 /// Run verify on a worker thread so the UI thread keeps animating.
 async fn verify_async(file: PathBuf, ots: PathBuf) -> Outcome {
     let join = tokio::task::spawn_blocking(move || {
-        let file_data = std::fs::read(&file).map_err(|e| format!("Read {}: {e}", file.display()))?;
+        let file_data =
+            std::fs::read(&file).map_err(|e| format!("Read {}: {e}", file.display()))?;
         let ots_data = std::fs::read(&ots).map_err(|e| format!("Read {}: {e}", ots.display()))?;
         let results = verify::verify_file(&file_data, &ots_data)?;
         Ok::<Vec<VerifyResult>, String>(results)
@@ -287,7 +346,11 @@ async fn verify_async(file: PathBuf, ots: PathBuf) -> Outcome {
     let results = match join {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => return Outcome::Error { message: e },
-        Err(e) => return Outcome::Error { message: format!("worker panicked: {e}") },
+        Err(e) => {
+            return Outcome::Error {
+                message: format!("worker panicked: {e}"),
+            };
+        }
     };
 
     summarize(&results)
@@ -299,7 +362,12 @@ async fn verify_async(file: PathBuf, ots: PathBuf) -> Outcome {
 /// most informative state in order failed > pending > skipped > error.
 fn summarize(results: &[VerifyResult]) -> Outcome {
     for r in results {
-        if let VerifyResult::BitcoinVerified { height, block_hash, timestamp } = r {
+        if let VerifyResult::BitcoinVerified {
+            height,
+            block_hash,
+            timestamp,
+        } = r
+        {
             return Outcome::Verified {
                 block: *height,
                 when: format_unix_utc(*timestamp),
@@ -325,12 +393,16 @@ fn summarize(results: &[VerifyResult]) -> Outcome {
     }
     for r in results {
         if let VerifyResult::Skipped { reason } = r {
-            return Outcome::Skipped { reason: reason.clone() };
+            return Outcome::Skipped {
+                reason: reason.clone(),
+            };
         }
     }
     for r in results {
         if let VerifyResult::Error { message } = r {
-            return Outcome::Error { message: message.clone() };
+            return Outcome::Error {
+                message: message.clone(),
+            };
         }
     }
     Outcome::Error {

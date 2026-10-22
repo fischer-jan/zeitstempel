@@ -1,9 +1,8 @@
+use crate::bitcoin;
+use crate::operations;
 /// Verification logic — hash the input file, walk the proof tree,
 /// and check attestations against the Bitcoin blockchain.
-
-use crate::parser::{self, OtsFile, Timestamp, Attestation};
-use crate::operations;
-use crate::bitcoin;
+use crate::parser::{self, Attestation, OtsFile, Timestamp};
 
 /// Result of verifying one attestation path.
 pub enum VerifyResult {
@@ -14,9 +13,7 @@ pub enum VerifyResult {
         timestamp: u64,
     },
     /// Proof chain ends at a pending calendar.
-    Pending {
-        uri: String,
-    },
+    Pending { uri: String },
     /// Merkle root did NOT match.
     Failed {
         height: u64,
@@ -24,13 +21,9 @@ pub enum VerifyResult {
         got: Vec<u8>,
     },
     /// Attestation type we don't verify (Litecoin, Ethereum, Unknown).
-    Skipped {
-        reason: String,
-    },
+    Skipped { reason: String },
     /// Network or API error during verification.
-    Error {
-        message: String,
-    },
+    Error { message: String },
 }
 
 /// Verify a file against its .ots proof.
@@ -38,8 +31,8 @@ pub enum VerifyResult {
 /// Returns one `VerifyResult` per attestation path in the proof tree.
 pub fn verify_file(file_data: &[u8], ots_data: &[u8]) -> Result<Vec<VerifyResult>, String> {
     // 1. Parse the .ots file
-    let ots = parser::parse_ots(ots_data)
-        .map_err(|e| format!("Failed to parse .ots file: {}", e))?;
+    let ots =
+        parser::parse_ots(ots_data).map_err(|e| format!("Failed to parse .ots file: {}", e))?;
 
     // 2. Hash the input file
     let computed_digest = operations::hash_file_contents(file_data, ots.hash_op)
@@ -66,15 +59,17 @@ pub fn verify_file(file_data: &[u8], ots_data: &[u8]) -> Result<Vec<VerifyResult
 /// This is for KanBanito's double-hash pattern: the "file" is a
 /// content-hash.txt containing 64 hex chars (the SHA256 of the data).
 /// The .ots header hash op was applied to that hash string.
-pub fn verify_hash_file(hash_file_data: &[u8], ots_data: &[u8]) -> Result<Vec<VerifyResult>, String> {
+pub fn verify_hash_file(
+    hash_file_data: &[u8],
+    ots_data: &[u8],
+) -> Result<Vec<VerifyResult>, String> {
     // Same as verify_file — the hash_file is just treated as any file
     verify_file(hash_file_data, ots_data)
 }
 
 /// Parse and return the OtsFile without verifying (for --info mode).
 pub fn parse_only(ots_data: &[u8]) -> Result<OtsFile, String> {
-    parser::parse_ots(ots_data)
-        .map_err(|e| format!("Failed to parse .ots file: {}", e))
+    parser::parse_ots(ots_data).map_err(|e| format!("Failed to parse .ots file: {}", e))
 }
 
 // ── Tree walker ────────────────────────────────────────────────────
@@ -117,10 +112,16 @@ fn check_attestation(att: &Attestation, msg: &[u8]) -> VerifyResult {
         Attestation::Bitcoin { height } => verify_bitcoin(*height, msg),
         Attestation::Pending { uri } => VerifyResult::Pending { uri: uri.clone() },
         Attestation::Litecoin { height } => VerifyResult::Skipped {
-            reason: format!("Litecoin block #{} — not verified (no Litecoin API configured)", height),
+            reason: format!(
+                "Litecoin block #{} — not verified (no Litecoin API configured)",
+                height
+            ),
         },
         Attestation::Ethereum { height } => VerifyResult::Skipped {
-            reason: format!("Ethereum block #{} — not verified (no Ethereum API configured)", height),
+            reason: format!(
+                "Ethereum block #{} — not verified (no Ethereum API configured)",
+                height
+            ),
         },
         Attestation::Unknown { tag, .. } => VerifyResult::Skipped {
             reason: format!("Unknown attestation type (tag: {})", parser::hex(tag)),
@@ -178,17 +179,21 @@ fn verify_bitcoin(height: u64, msg: &[u8]) -> VerifyResult {
     // Fetch block info from the API
     let block_info = match bitcoin::get_block_info(height) {
         Ok(info) => info,
-        Err(e) => return VerifyResult::Error {
-            message: format!("Could not fetch Bitcoin block #{}: {}", height, e),
-        },
+        Err(e) => {
+            return VerifyResult::Error {
+                message: format!("Could not fetch Bitcoin block #{}: {}", height, e),
+            };
+        }
     };
 
     // Convert API merkle root (big-endian hex) to little-endian bytes
     let expected_le = match bitcoin::merkle_root_to_le_bytes(&block_info.merkle_root) {
         Ok(bytes) => bytes,
-        Err(e) => return VerifyResult::Error {
-            message: format!("Bad merkle root from API: {}", e),
-        },
+        Err(e) => {
+            return VerifyResult::Error {
+                message: format!("Bad merkle root from API: {}", e),
+            };
+        }
     };
 
     // Compare!

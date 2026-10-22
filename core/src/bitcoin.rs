@@ -4,7 +4,6 @@
 /// The two endpoints we need:
 ///   GET /api/block-height/{height}  → block hash (plain text)
 ///   GET /api/block/{hash}           → JSON with merkle_root, timestamp, etc.
-
 use std::fmt;
 
 /// Information about a Bitcoin block relevant for OTS verification.
@@ -12,8 +11,8 @@ use std::fmt;
 pub struct BlockInfo {
     pub height: u64,
     pub block_hash: String,
-    pub merkle_root: String,  // hex, display order (big-endian)
-    pub timestamp: u64,       // Unix epoch seconds
+    pub merkle_root: String,               // hex, display order (big-endian)
+    pub timestamp: u64,                    // Unix epoch seconds
     pub previousblockhash: Option<String>, // for future chain validation
 }
 
@@ -26,7 +25,7 @@ pub enum ApiError {
 impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ApiError::Http(msg)  => write!(f, "HTTP error: {}", msg),
+            ApiError::Http(msg) => write!(f, "HTTP error: {}", msg),
             ApiError::Parse(msg) => write!(f, "parse error: {}", msg),
         }
     }
@@ -38,11 +37,10 @@ impl std::error::Error for ApiError {}
 ///
 /// Tries Blockstream.info first, falls back to mempool.space.
 pub fn get_block_info(height: u64) -> Result<BlockInfo, ApiError> {
-    get_block_info_from("https://blockstream.info/api", height)
-        .or_else(|_| {
-            eprintln!("  (Blockstream unavailable, trying mempool.space...)");
-            get_block_info_from("https://mempool.space/api", height)
-        })
+    get_block_info_from("https://blockstream.info/api", height).or_else(|_| {
+        eprintln!("  (Blockstream unavailable, trying mempool.space...)");
+        get_block_info_from("https://mempool.space/api", height)
+    })
 }
 
 fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiError> {
@@ -55,7 +53,8 @@ fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiErro
     if block_hash.len() != 64 {
         return Err(ApiError::Parse(format!(
             "expected 64-char block hash, got {} chars: '{}'",
-            block_hash.len(), block_hash
+            block_hash.len(),
+            block_hash
         )));
     }
 
@@ -97,9 +96,7 @@ fn get_block_info_from(base_url: &str, height: u64) -> Result<BlockInfo, ApiErro
         ));
     }
 
-    let previousblockhash = json["previousblockhash"]
-        .as_str()
-        .map(|s| s.to_string());
+    let previousblockhash = json["previousblockhash"].as_str().map(|s| s.to_string());
 
     Ok(BlockInfo {
         height,
@@ -127,8 +124,8 @@ fn http_get_text(url: &str) -> Result<String, ApiError> {
 /// The API returns "abc123..." in display order, but the proof chain
 /// produces bytes in little-endian (reversed) order.
 pub fn merkle_root_to_le_bytes(hex_be: &str) -> Result<Vec<u8>, ApiError> {
-    let bytes = hex_to_bytes(hex_be)
-        .map_err(|e| ApiError::Parse(format!("bad merkle root hex: {}", e)))?;
+    let bytes =
+        hex_to_bytes(hex_be).map_err(|e| ApiError::Parse(format!("bad merkle root hex: {}", e)))?;
     let mut le = bytes;
     le.reverse();
     Ok(le)

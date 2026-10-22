@@ -93,7 +93,10 @@ fn run_stamp(file_path: &str) {
 
     // Check if .ots already exists
     if std::path::Path::new(&ots_path).exists() {
-        eprintln!("Error: '{}' already exists. Remove it first to re-stamp.", ots_path);
+        eprintln!(
+            "Error: '{}' already exists. Remove it first to re-stamp.",
+            ots_path
+        );
         process::exit(1);
     }
 
@@ -108,7 +111,10 @@ fn run_stamp(file_path: &str) {
             println!("Timestamp proof created: {}", ots_path);
             println!();
             println!("The proof is pending — it will be anchored to Bitcoin within");
-            println!("a few hours. Run `zeitstempel upgrade {}` to complete it,", ots_path);
+            println!(
+                "a few hours. Run `zeitstempel upgrade {}` to complete it,",
+                ots_path
+            );
             println!("or use `zeitstempel info {}` to inspect it.", ots_path);
         }
         Err(e) => {
@@ -152,7 +158,11 @@ fn run_verify(file_path: &str, ots_path: &str) {
 
     for result in &results {
         match result {
-            verify::VerifyResult::BitcoinVerified { height, block_hash, timestamp } => {
+            verify::VerifyResult::BitcoinVerified {
+                height,
+                block_hash,
+                timestamp,
+            } => {
                 any_verified = true;
                 let dt = zeitstempel::format_unix_utc(*timestamp);
                 println!();
@@ -166,10 +176,17 @@ fn run_verify(file_path: &str, ots_path: &str) {
                 println!("  Pending — proof not yet anchored to Bitcoin");
                 println!("  Calendar: {}", uri);
             }
-            verify::VerifyResult::Failed { height, expected, got } => {
+            verify::VerifyResult::Failed {
+                height,
+                expected,
+                got,
+            } => {
                 any_failed = true;
                 println!();
-                println!("  Verification FAILED — merkle root mismatch at block #{}", height);
+                println!(
+                    "  Verification FAILED — merkle root mismatch at block #{}",
+                    height
+                );
                 println!("  Expected: {}", parser::hex(expected));
                 println!("  Got:      {}", parser::hex(got));
             }
@@ -207,4 +224,3 @@ fn read_file_or_exit(path: &str) -> Vec<u8> {
         }
     }
 }
-
